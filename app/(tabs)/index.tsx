@@ -1,123 +1,3 @@
-/*import { Image, StyleSheet, Platform, TouchableOpacity } from 'react-native';
-import { HelloWave } from '@/components/HelloWave';
-import ParallaxScrollView from '@/components/ParallaxScrollView';
-import { ThemedText } from '@/components/ThemedText';
-import { ThemedView } from '@/components/ThemedView';
-import { useEffect, useState } from 'react';
-import { Text } from 'react-native';
-import { db } from "@/config/firebaseConfig"; // Import your Firebase config
-import { onValue, ref, set, update } from 'firebase/database';
-
-export default function HomeScreen() {
-    const [count, setCount] = useState(0);
-
-    useEffect(() => {
-        const counterRef = ref(db, "counter");
-        onValue(counterRef, (snapshot) => {
-            const data = snapshot.val();
-            if (data) {
-                setCount(data.value);
-            }
-        });
-    }, [])
-    const writeUserData = (userId: number, name: string, email: string) => {
-        const reference = ref(db, "users/" + userId);  // Path to "users" node
-        set(reference, {
-            username: name,
-            email: email
-        }).then(() => {
-            console.log('Data written successfully!');
-        }).catch((error) => {
-            console.error('Error writing data: ', error);
-        });
-    };
-
-    const handlePlus = () => {
-        updateCount(count + 1);
-    };
-
-    const handleMinus = () => {
-        updateCount(count - 1);
-    };
-    const updateCount = (newCount: number) => {
-        const reference = ref(db, "counter/"); // Reference to the 'counter' node
-        setCount(newCount); // Update local state for the counter value
-        update(reference, {
-            value: newCount // Only update the 'value' field
-        }).then(() => {
-            console.log('Counter updated successfully!');
-        }).catch((error) => {
-            console.error('Error updating counter: ', error);
-        });
-    }
-    return (
-        <ParallaxScrollView
-            headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-            headerImage={
-                <Image
-                    source={require('@/assets/images/partial-react-logo.png')}
-                    style={styles.reactLogo}
-                />
-            }>
-            <ThemedView style={styles.titleContainer}>
-                <ThemedText type="title">Welcome! {count}</ThemedText>
-                <HelloWave />
-            </ThemedView>
-            <ThemedView style={[styles.stepContainer, { flexDirection: 'row' }]}>
-                <TouchableOpacity
-                    style={[styles.button, styles.buttonPrimary]}
-                    onPress={() => writeUserData(1, "vuong", "email@example.com")}>
-                    <Text style={styles.buttonText}>User</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                    style={[styles.button, styles.buttonPrimary]}
-                    onPress={handlePlus}>
-                    <Text style={styles.buttonText}>+</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                    style={[styles.button, styles.buttonPrimary]}
-                    onPress={handleMinus}>
-                    <Text style={styles.buttonText}>-</Text>
-                </TouchableOpacity>
-            </ThemedView>
-        </ParallaxScrollView>
-    );
-}
-
-const styles = StyleSheet.create({
-    titleContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 8,
-    },
-    stepContainer: {
-        gap: 8,
-        marginBottom: 8,
-    },
-    reactLogo: {
-        height: 178,
-        width: 290,
-        bottom: 0,
-        left: 0,
-        position: 'absolute',
-    },
-    button: {
-        padding: 20,
-        marginHorizontal: 5,
-        borderRadius: 5,
-    },
-    buttonPrimary: {
-        backgroundColor: '#3498db',
-    },
-    buttonText: {
-        color: '#fff',
-        fontSize: 32,
-        fontWeight: 'bold',
-        textAlign: 'center',
-    },
-});
-*/
-
 import { Image, StyleSheet, TouchableOpacity } from 'react-native';
 import { useEffect, useState } from 'react';
 import { Text, View } from 'react-native';
@@ -128,45 +8,71 @@ import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 
 export default function HomeScreen() {
+    
     const [raceStatus, setRaceStatus] = useState<number | null>(null);
-    const [startTime, setStartTime] = useState<number | null>(null);
-    const [elapsedTime, setElapsedTime] = useState<number | null>(null);
+    const [player1StartTime, setPlayer1StartTime] = useState<number | null>(null);
+    const [player2StartTime, setPlayer2StartTime] = useState<number | null>(null);
+    const [player1ElapsedTime, setPlayer1ElapsedTime] = useState<number | null>(null);
+    const [player2ElapsedTime, setPlayer2ElapsedTime] = useState<number | null>(null);
+    const [player1Stopped, setPlayer1Stopped] = useState(false);
+    const [player2Stopped, setPlayer2Stopped] = useState(false);
 
     useEffect(() => {
-        const raceRef = ref(db, "motor");
-        onValue(raceRef, (snapshot) => {
+        const raceRef = ref(db, "motor/state");
+        const unsubscribe = onValue(raceRef, (snapshot) => {
             const data = snapshot.val();
             if (data !== null) {
                 setRaceStatus(data);
                 if (data === 1) {
-                    setStartTime(Date.now());
-                    setElapsedTime(null);
-                } else if (data === 0 && startTime !== null) {
-                    setElapsedTime((Date.now() - startTime) / 1000);
+                    setPlayer1StartTime(Date.now());
+                    setPlayer2StartTime(Date.now());
+                    setPlayer1ElapsedTime(null);
+                    setPlayer2ElapsedTime(null);
+                    setPlayer1Stopped(false);
+                    setPlayer2Stopped(false);
                 }
             }
         });
-    }, [startTime]);
+        return () => unsubscribe();
+    }, []);
 
     const handleRaceStart = () => {
         const raceRef = ref(db, "motor");
         update(raceRef, { state: 1 });
-        setStartTime(Date.now());
-        setElapsedTime(null);
+        setRaceStatus(1);
+        const startTime = Date.now();
+        setPlayer1StartTime(startTime);
+        setPlayer2StartTime(startTime);
+        setPlayer1ElapsedTime(null);
+        setPlayer2ElapsedTime(null);
+        setPlayer1Stopped(false);
+        setPlayer2Stopped(false);
     };
 
-    const handleRaceStop =() => {
-        const raceRef = ref(db, "motor");
-        update(raceRef, { state: 0 });
-        if (startTime !== null) {
-            setElapsedTime((Date.now() - startTime) / 1000);
+    const handlePlayer1Stop = () => {
+        if (player1StartTime !== null) {
+            setPlayer1ElapsedTime((Date.now() - player1StartTime) / 1000);
+            setPlayer1Stopped(true);
+        }
+    };
+
+    const handlePlayer2Stop = () => {
+        if (player2StartTime !== null) {
+            setPlayer2ElapsedTime((Date.now() - player2StartTime) / 1000);
+            setPlayer2Stopped(true);
         }
     };
 
     const handleContinue = () => {
+        const raceRef = ref(db, "motor");
+        update(raceRef, { state: 0 });
         setRaceStatus(null);
-        setStartTime(null);
-        setElapsedTime(null);
+        setPlayer1StartTime(null);
+        setPlayer2StartTime(null);
+        setPlayer1ElapsedTime(null);
+        setPlayer2ElapsedTime(null);
+        setPlayer1Stopped(false);
+        setPlayer2Stopped(false);
     };
 
     return (
@@ -174,12 +80,12 @@ export default function HomeScreen() {
             headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
             headerImage={
                 <Image
-                    source={require('@/assets/images/partial-react-logo.png')}
+                    source={require('@/assets/images/ZINGSPEED.png')}
                     style={styles.reactLogo}
                 />
             }>
             <ThemedView style={styles.titleContainer}>
-                <ThemedText type="title">ZING SPEED</ThemedText>
+                <ThemedText type="title"></ThemedText>
             </ThemedView>
             {raceStatus === null ? (
                 <ThemedView style={styles.centerContainer}>
@@ -190,17 +96,27 @@ export default function HomeScreen() {
             ) : (
                 <>
                     <ThemedView style={[styles.stepContainer, { flexDirection: 'row' }]}>                
-                        <TouchableOpacity style={[styles.button, styles.buttonStart]} onPress={handleRaceStart}>
-                            <Text style={styles.buttonText}>Start</Text>
+                        <TouchableOpacity 
+                            style={[styles.button, styles.buttonStop]} 
+                            onPress={handlePlayer1Stop}
+                            disabled={player1Stopped}
+                        >
+                            <Text style={styles.buttonText}>Player1</Text>
                         </TouchableOpacity>
-                        <TouchableOpacity style={[styles.button, styles.buttonStop]} onPress={handleRaceStop}>
-                            <Text style={styles.buttonText}>Stop</Text>
+
+                        <TouchableOpacity 
+                            style={[styles.button, styles.buttonStop]} 
+                            onPress={handlePlayer2Stop}
+                            disabled={player2Stopped}
+                        >
+                            <Text style={styles.buttonText}>Player2</Text>
                         </TouchableOpacity>
                     </ThemedView>
-                    {elapsedTime !== null && (
+                    {(player1Stopped && player2Stopped) && (
                         <ThemedView style={styles.timeContainer}>
-                            <ThemedText type="subtitle">Time:</ThemedText>
-                            <Text style={styles.timeText}>{elapsedTime.toFixed(2)} seconds</Text>
+                            <ThemedText type="subtitle">Results:</ThemedText>
+                            <Text style={styles.timeText}>Player 1: {player1ElapsedTime?.toFixed(2)} s</Text>
+                            <Text style={styles.timeText}>Player 2: {player2ElapsedTime?.toFixed(2)} s</Text>
                             <TouchableOpacity style={[styles.button, styles.buttonContinue]} onPress={handleContinue}>
                                 <Text style={styles.buttonText}>Continue</Text>
                             </TouchableOpacity>
@@ -227,16 +143,16 @@ const styles = StyleSheet.create({
         marginBottom: 8,
     },
     reactLogo: {
-        height: 178,
+        height: 200,
         width: 290,
-        bottom: 0,
-        left: 0,
+        bottom: -20,
+        left: 50,
         position: 'absolute',
     },
     button: {
         padding: 20,
         marginHorizontal: 5,
-        borderRadius: 5,
+        borderRadius: 100,
     },
     buttonStart: {
         backgroundColor: '#27ae60',
@@ -250,7 +166,7 @@ const styles = StyleSheet.create({
     },
     buttonText: {
         color: '#fff',
-        fontSize: 24,
+        fontSize: 30,
         fontWeight: 'bold',
         textAlign: 'center',
     },

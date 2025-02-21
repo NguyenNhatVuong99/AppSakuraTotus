@@ -1,85 +1,122 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Dimensions, SafeAreaView, Animated } from 'react-native';
 import Icon from 'react-native-vector-icons/FontAwesome';
 import { db } from '@/config/firebaseConfig';
-import { ref, update, set } from 'firebase/database';
+import { ref, update, set, onValue } from 'firebase/database';
 import * as Network from 'expo-network';
+
+const { width, height } = Dimensions.get('window');
 
 export default function Controller() {
   const [username, setUsername] = useState('');
   const [ipAddress, setIpAddress] = useState('');
   const [isRegistered, setIsRegistered] = useState(false);
+  const [raceStatus, setRaceStatus] = useState<number | null>(null);
 
   useEffect(() => {
     const fetchIpAddress = async () => {
       const ip = await Network.getIpAddressAsync();
-      if (ip) setIpAddress(ip); 
+      if (ip) setIpAddress(ip);
     };
 
     fetchIpAddress();
+
+    const raceRef = ref(db, "motor/state");
+    const unsubscribeRace = onValue(raceRef, (snapshot) => {
+      setRaceStatus(snapshot.val());
+    });
+
+    return () => {
+      unsubscribeRace();
+    };
   }, []);
 
   const handleStart = () => {
     if (!username.trim()) {
-      alert("input your name");
+      alert("Input your name");
       return;
     }
 
     const userRef = ref(db, `players/${username}`);
-    set(userRef, { ip: ipAddress, direction: "STOP", speed: 0 });
+    set(userRef, { ip: ipAddress, direction: "0", motorstate: 0 });
 
     setIsRegistered(true);
   };
 
-  const handleCarMove = (direction: string, speed: number = 1) => {
+  const handleCarMove = (direction, motorstate = 1) => {
+    if (raceStatus !== 1) return;
+
     const userRef = ref(db, `players/${username}`);
-    update(userRef, { direction, speed });
+    const motorRef = ref(db, "motor");
+
+    update(userRef, { direction, motorstate });
+    update(motorRef, { state1: motorstate });
+  };
+
+  const AnimatedButton = ({ onPress, icon, disabled }) => {
+    const scaleAnim = useRef(new Animated.Value(1)).current;
+
+    const handlePressIn = () => {
+      if (!disabled) {
+        Animated.spring(scaleAnim, {
+          toValue: 0.9,
+          useNativeDriver: true,
+        }).start();
+      }
+    };
+
+    const handlePressOut = () => {
+      if (!disabled) {
+        Animated.spring(scaleAnim, {
+          toValue: 1,
+          useNativeDriver: true,
+        }).start(() => onPress());
+      }
+    };
+
+    return (
+      <TouchableOpacity onPressIn={handlePressIn} onPressOut={handlePressOut} activeOpacity={0.8} disabled={disabled}>
+        <Animated.View style={[styles.button, disabled && styles.disabledButton, { transform: [{ scale: scaleAnim }] }]}> 
+          <Icon name={icon} size={50} color="white" />
+        </Animated.View>
+      </TouchableOpacity>
+    );
   };
 
   if (!isRegistered) {
     return (
-      <View style={styles.container}>
-        <Text style={styles.title}>input your name</Text>
+      <SafeAreaView style={styles.container}>
+        <Text style={styles.title}>Input your name</Text>
         <TextInput
           style={styles.input}
-          placeholder="input your name"
+          placeholder="Input your name"
           value={username}
           onChangeText={setUsername}
         />
         <TouchableOpacity style={styles.button} onPress={handleStart}>
-          <Text style={styles.buttonText}>start</Text>
+          <Text style={styles.buttonText}>Start</Text>
         </TouchableOpacity>
         <Text style={styles.info}>IP Address: {ipAddress || "loading..."}</Text>
-      </View>
+      </SafeAreaView>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       <View style={styles.controls}>
-        <View style={styles.controlLeft}>
-          <TouchableOpacity style={styles.button} onPress={() => handleCarMove("U", 1)}>
-            <Icon name="arrow-up" size={100} color="white" />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.button} onPress={() => handleCarMove("D", 1)}>
-            <Icon name="arrow-down" size={100} color="white" />
-          </TouchableOpacity>
+        <View style={styles.controlColumn}>
+          <AnimatedButton onPress={() => handleCarMove("1", 1)} icon="arrow-up" disabled={raceStatus !== 1} />
+          <AnimatedButton onPress={() => handleCarMove("2", 2)} icon="arrow-down" disabled={raceStatus !== 1} />
         </View>
-        <View style={styles.controlRight}>
-          <TouchableOpacity style={styles.button} onPress={() => handleCarMove("L", 1)}>
-            <Icon name="arrow-left" size={100} color="white" />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.button} onPress={() => handleCarMove("R", 1)}>
-            <Icon name="arrow-right" size={100} color="white" />
-          </TouchableOpacity>
+        <View style={styles.controlRow}>
+          <AnimatedButton onPress={() => handleCarMove("3", 3)} icon="arrow-left" disabled={raceStatus !== 1} />
+          <AnimatedButton onPress={() => handleCarMove("4", 4)} icon="arrow-right" disabled={raceStatus !== 1} />
         </View>
       </View>
-
       <View style={styles.userInfo}>
-        <Text style={styles.userText}>name: {username}</Text>
-        <Text style={styles.userText}>IP: {ipAddress || "loading..."}</Text>
+        <Text style={styles.userText}>Name: {username}</Text>
       </View>
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -106,66 +143,59 @@ const styles = StyleSheet.create({
   },
   button: {
     backgroundColor: '#3498db',
-    padding: 15,
-    borderRadius: 5,
-    marginTop: 10,
+    padding: 25,
+    borderRadius: 60,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginVertical: 0,
   },
-  buttonText: {
-    color: 'white',
-    fontSize: 18,
-  },
-  info: {
-    marginTop: 20,
-    fontSize: 16,
+  disabledButton: {
+    backgroundColor: '#95a5a6',
   },
   controls: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    width: '100%',
+    width: '90%',
     paddingHorizontal: 20,
-    marginBottom: 20,
   },
-  controlLeft: {
+  controlColumn: {
     flexDirection: 'column',
     alignItems: 'center',
   },
-  controlRight: {
+  controlRow: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   userInfo: {
     position: 'absolute',
-    bottom: 20,
+    bottom: 300,
     left: 20,
     right: 20,
     padding: 10,
-    backgroundColor: '#2c3e50',
     borderRadius: 10,
     alignItems: 'center',
   },
   userText: {
-    color: 'white',
-    fontSize: 20,
+    fontSize: 30,
     fontWeight: 'bold',
   },
 });
 
-/*import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, FlatList } from 'react-native';
+/*import React, { useState, useEffect, useRef } from 'react';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Dimensions, SafeAreaView, Animated, Image } from 'react-native';
 import Icon from 'react-native-vector-icons/FontAwesome';
 import { db } from '@/config/firebaseConfig';
-import { ref, update, set } from 'firebase/database';
+import { ref, update, set, onValue } from 'firebase/database';
 import * as Network from 'expo-network';
-import { BleManager } from 'react-native-ble-plx';
 
-const manager = new BleManager();
+const { width, height } = Dimensions.get('window');
 
 export default function Controller() {
   const [username, setUsername] = useState('');
   const [ipAddress, setIpAddress] = useState('');
   const [isRegistered, setIsRegistered] = useState(false);
-  const [bleDevices, setBleDevices] = useState([]);
-  const [selectedBleDevice, setSelectedBleDevice] = useState(null);
+  const [raceStatus, setRaceStatus] = useState<number | null>(null);
+  const [showGif, setShowGif] = useState(false); // GIF表示管理
 
   useEffect(() => {
     const fetchIpAddress = async () => {
@@ -174,126 +204,152 @@ export default function Controller() {
     };
 
     fetchIpAddress();
-    scanBleDevices();
-  }, []);
 
-  // BLEデバイスのスキャン
-  const scanBleDevices = () => {
-    setBleDevices([]);
-    manager.startDeviceScan(null, null, (error, device) => {
-      if (error) {
-        console.error("BLE Scan Error:", error);
-        return;
-      }
-      if (device && device.name) {
-        setBleDevices(prevDevices => {
-          if (!prevDevices.some(d => d.id === device.id)) {
-            return [...prevDevices, { id: device.id, name: device.name }];
-          }
-          return prevDevices;
-        });
-      }
+    const raceRef = ref(db, "motor/state");
+    const unsubscribeRace = onValue(raceRef, (snapshot) => {
+      setRaceStatus(snapshot.val());
     });
 
-    setTimeout(() => {
-      manager.stopDeviceScan();
-    }, 5000);
-  };
+    return () => {
+      unsubscribeRace();
+    };
+  }, []);
 
-  // ユーザー登録時にBLE情報も保存
   const handleStart = () => {
     if (!username.trim()) {
-      alert("名前を入力してください");
-      return;
-    }
-    if (!selectedBleDevice) {
-      alert("接続する BLE デバイスを選択してください");
+      alert("Input your name");
       return;
     }
 
     const userRef = ref(db, `players/${username}`);
-    set(userRef, { ip: ipAddress, bleAddress: selectedBleDevice.id, direction: "STOP", speed: 0 });
+    set(userRef, { ip: ipAddress, direction: "0", motorstate: 0 });
 
     setIsRegistered(true);
   };
 
-  // 車を動かすコマンド
-  const handleCarMove = (direction: string, speed: number = 1) => {
+  const handleRaceStart = () => {
+    if (raceStatus !== 1) {
+      setShowGif(true); // GIFを表示
+
+      setTimeout(() => {
+        setShowGif(false); // 数秒後に非表示
+      }, 3000); // 3秒間表示
+
+      const raceRef = ref(db, "motor");
+      update(raceRef, { state: 1 });
+      setRaceStatus(1);
+    }
+  };
+
+  const handleCarMove = (direction, motorstate = 1) => {
+    if (raceStatus !== 1) return;
+
     const userRef = ref(db, `players/${username}`);
-    update(userRef, { direction, speed });
+    const motorRef = ref(db, "motor");
+
+    update(userRef, { direction, motorstate });
+    update(motorRef, { state1: motorstate });
+  };
+
+  const AnimatedButton = ({ onPress, icon, disabled }) => {
+    const scaleAnim = useRef(new Animated.Value(1)).current;
+
+    const handlePressIn = () => {
+      if (!disabled) {
+        Animated.spring(scaleAnim, {
+          toValue: 0.9,
+          useNativeDriver: true,
+        }).start();
+      }
+    };
+
+    const handlePressOut = () => {
+      if (!disabled) {
+        Animated.spring(scaleAnim, {
+          toValue: 1,
+          useNativeDriver: true,
+        }).start(() => onPress());
+      }
+    };
+
+    return (
+      <TouchableOpacity onPressIn={handlePressIn} onPressOut={handlePressOut} activeOpacity={0.8} disabled={disabled}>
+        <Animated.View style={[styles.button, disabled && styles.disabledButton, { transform: [{ scale: scaleAnim }] }]}> 
+          <Icon name={icon} size={50} color="white" />
+        </Animated.View>
+      </TouchableOpacity>
+    );
   };
 
   if (!isRegistered) {
     return (
-      <View style={styles.container}>
-        <Text style={styles.title}>名前を入力してください</Text>
+      <SafeAreaView style={styles.container}>
+        <Text style={styles.title}>Input your name</Text>
         <TextInput
           style={styles.input}
-          placeholder="名前を入力"
+          placeholder="Input your name"
           value={username}
           onChangeText={setUsername}
         />
-        <Text style={styles.title}>BLEデバイスを選択</Text>
-        <FlatList
-          data={bleDevices}
-          keyExtractor={item => item.id}
-          renderItem={({ item }) => (
-            <TouchableOpacity
-              style={[styles.bleItem, selectedBleDevice?.id === item.id && styles.selectedBle]}
-              onPress={() => setSelectedBleDevice(item)}
-            >
-              <Text style={styles.bleText}>{item.name} ({item.id})</Text>
-            </TouchableOpacity>
-          )}
-        />
-        <TouchableOpacity style={styles.button} onPress={scanBleDevices}>
-          <Text style={styles.buttonText}>BLEスキャン</Text>
-        </TouchableOpacity>
         <TouchableOpacity style={styles.button} onPress={handleStart}>
-          <Text style={styles.buttonText}>スタート</Text>
+          <Text style={styles.buttonText}>Start</Text>
         </TouchableOpacity>
-        <Text style={styles.info}>IP Address: {ipAddress || "取得中..."}</Text>
-      </View>
+        <Text style={styles.info}>IP Address: {ipAddress || "loading..."}</Text>
+      </SafeAreaView>
     );
   }
 
   return (
-    <View style={styles.container}>
-      <View style={styles.controls}>
-        <View style={styles.controlLeft}>
-          <TouchableOpacity style={styles.button} onPress={() => handleCarMove("U", 1)}>
-            <Icon name="arrow-up" size={100} color="white" />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.button} onPress={() => handleCarMove("D", 1)}>
-            <Icon name="arrow-down" size={100} color="white" />
-          </TouchableOpacity>
+    <SafeAreaView style={styles.container}>
+      {showGif && (
+        <View style={styles.gifContainer}>
+          <Image source={require('@/assets/animations/start.gif')} style={styles.gif} />
         </View>
-        <View style={styles.controlRight}>
-          <TouchableOpacity style={styles.button} onPress={() => handleCarMove("L", 1)}>
-            <Icon name="arrow-left" size={100} color="white" />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.button} onPress={() => handleCarMove("R", 1)}>
-            <Icon name="arrow-right" size={100} color="white" />
-          </TouchableOpacity>
+      )}
+      
+      <View style={styles.controls}>
+        <TouchableOpacity style={styles.startButton} onPress={handleRaceStart}>
+          <Text style={styles.startButtonText}>Start Race</Text>
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.controls}>
+        <View style={styles.controlColumn}>
+          <AnimatedButton onPress={() => handleCarMove("1", 1)} icon="arrow-up" disabled={raceStatus !== 1} />
+          <AnimatedButton onPress={() => handleCarMove("2", 2)} icon="arrow-down" disabled={raceStatus !== 1} />
+        </View>
+        <View style={styles.controlRow}>
+          <AnimatedButton onPress={() => handleCarMove("3", 3)} icon="arrow-left" disabled={raceStatus !== 1} />
+          <AnimatedButton onPress={() => handleCarMove("4", 4)} icon="arrow-right" disabled={raceStatus !== 1} />
         </View>
       </View>
 
       <View style={styles.userInfo}>
-        <Text style={styles.userText}>名前: {username}</Text>
-        <Text style={styles.userText}>IP: {ipAddress || "取得中..."}</Text>
-        <Text style={styles.userText}>BLE: {selectedBleDevice?.name || "未選択"}</Text>
+        <Text style={styles.userText}>Name: {username}</Text>
       </View>
-    </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1, 
+    flex: 1,
     justifyContent: 'center', 
     alignItems: 'center',
     paddingHorizontal: 20,
     backgroundColor: '#f5f5f5',
+  },
+  gifContainer: {
+    position: 'absolute',
+    top: '30%',
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+  },
+  gif: {
+    width: 300,
+    height: 200,
+    resizeMode: 'contain',
   },
   title: {
     fontSize: 24,
@@ -310,61 +366,54 @@ const styles = StyleSheet.create({
   },
   button: {
     backgroundColor: '#3498db',
-    padding: 15,
-    borderRadius: 5,
-    marginTop: 10,
+    padding: 25,
+    borderRadius: 60,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginVertical: 0,
   },
-  buttonText: {
-    color: 'white',
-    fontSize: 18,
-  },
-  info: {
-    marginTop: 20,
-    fontSize: 16,
+  disabledButton: {
+    backgroundColor: '#95a5a6',
   },
   controls: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    width: '100%',
+    width: '90%',
     paddingHorizontal: 20,
-    marginBottom: 20,
   },
-  controlLeft: {
+  controlColumn: {
     flexDirection: 'column',
     alignItems: 'center',
   },
-  controlRight: {
+  controlRow: {
     flexDirection: 'row',
     alignItems: 'center',
   },
-  userInfo: {
-    position: 'absolute',
-    bottom: 20,
-    left: 20,
-    right: 20,
-    padding: 10,
-    backgroundColor: '#2c3e50',
+  startButton: {
+    backgroundColor: '#2ecc71',
+    padding: 15,
     borderRadius: 10,
     alignItems: 'center',
+    marginBottom: 20,
   },
-  userText: {
+  startButtonText: {
     color: 'white',
     fontSize: 20,
     fontWeight: 'bold',
   },
-  bleItem: {
+  userInfo: {
+    position: 'absolute',
+    bottom: 300,
+    left: 20,
+    right: 20,
     padding: 10,
-    marginVertical: 5,
-    backgroundColor: '#ecf0f1',
-    borderRadius: 5,
-    width: '80%',
+    borderRadius: 10,
+    alignItems: 'center',
   },
-  selectedBle: {
-    backgroundColor: '#2ecc71',
-  },
-  bleText: {
-    fontSize: 16,
-    textAlign: 'center',
+  userText: {
+    fontSize: 30,
+    fontWeight: 'bold',
   },
 });*/
+
 

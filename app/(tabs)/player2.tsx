@@ -1,85 +1,122 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Dimensions, SafeAreaView, Animated } from 'react-native';
 import Icon from 'react-native-vector-icons/FontAwesome';
 import { db } from '@/config/firebaseConfig';
-import { ref, update, set } from 'firebase/database';
+import { ref, update, set, onValue } from 'firebase/database';
 import * as Network from 'expo-network';
+
+const { width, height } = Dimensions.get('window');
 
 export default function Controller() {
   const [username, setUsername] = useState('');
   const [ipAddress, setIpAddress] = useState('');
   const [isRegistered, setIsRegistered] = useState(false);
+  const [raceStatus, setRaceStatus] = useState<number | null>(null);
 
   useEffect(() => {
     const fetchIpAddress = async () => {
       const ip = await Network.getIpAddressAsync();
-      if (ip) setIpAddress(ip); 
+      if (ip) setIpAddress(ip);
     };
 
     fetchIpAddress();
+
+    const raceRef = ref(db, "motor/state");
+    const unsubscribeRace = onValue(raceRef, (snapshot) => {
+      setRaceStatus(snapshot.val());
+    });
+
+    return () => {
+      unsubscribeRace();
+    };
   }, []);
 
   const handleStart = () => {
     if (!username.trim()) {
-      alert("input your name");
+      alert("Input your name");
       return;
     }
 
     const userRef = ref(db, `players/${username}`);
-    set(userRef, { ip: ipAddress, direction: "STOP", speed: 0 });
+    set(userRef, { ip: ipAddress, direction: "0", motorstate: 0 });
 
     setIsRegistered(true);
   };
 
-  const handleCarMove = (direction: string, speed: number = 1) => {
+  const handleCarMove = (direction, motorstate = 1) => {
+    if (raceStatus !== 1) return;
+
     const userRef = ref(db, `players/${username}`);
-    update(userRef, { direction, speed });
+    const motorRef = ref(db, "motor");
+
+    update(userRef, { direction, motorstate });
+    update(motorRef, { state2: motorstate });
+  };
+
+  const AnimatedButton = ({ onPress, icon, disabled }) => {
+    const scaleAnim = useRef(new Animated.Value(1)).current;
+
+    const handlePressIn = () => {
+      if (!disabled) {
+        Animated.spring(scaleAnim, {
+          toValue: 0.9,
+          useNativeDriver: true,
+        }).start();
+      }
+    };
+
+    const handlePressOut = () => {
+      if (!disabled) {
+        Animated.spring(scaleAnim, {
+          toValue: 1,
+          useNativeDriver: true,
+        }).start(() => onPress());
+      }
+    };
+
+    return (
+      <TouchableOpacity onPressIn={handlePressIn} onPressOut={handlePressOut} activeOpacity={0.8} disabled={disabled}>
+        <Animated.View style={[styles.button, disabled && styles.disabledButton, { transform: [{ scale: scaleAnim }] }]}> 
+          <Icon name={icon} size={50} color="white" />
+        </Animated.View>
+      </TouchableOpacity>
+    );
   };
 
   if (!isRegistered) {
     return (
-      <View style={styles.container}>
-        <Text style={styles.title}>input your name</Text>
+      <SafeAreaView style={styles.container}>
+        <Text style={styles.title}>Input your name</Text>
         <TextInput
           style={styles.input}
-          placeholder="input your name"
+          placeholder="Input your name"
           value={username}
           onChangeText={setUsername}
         />
         <TouchableOpacity style={styles.button} onPress={handleStart}>
-          <Text style={styles.buttonText}>start</Text>
+          <Text style={styles.buttonText}>Start</Text>
         </TouchableOpacity>
         <Text style={styles.info}>IP Address: {ipAddress || "loading..."}</Text>
-      </View>
+      </SafeAreaView>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       <View style={styles.controls}>
-        <View style={styles.controlLeft}>
-          <TouchableOpacity style={styles.button} onPress={() => handleCarMove("U", 1)}>
-            <Icon name="arrow-up" size={100} color="white" />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.button} onPress={() => handleCarMove("D", 1)}>
-            <Icon name="arrow-down" size={100} color="white" />
-          </TouchableOpacity>
+        <View style={styles.controlColumn}>
+          <AnimatedButton onPress={() => handleCarMove("1", 1)} icon="arrow-up" disabled={raceStatus !== 1} />
+          <AnimatedButton onPress={() => handleCarMove("2", 2)} icon="arrow-down" disabled={raceStatus !== 1} />
         </View>
-        <View style={styles.controlRight}>
-          <TouchableOpacity style={styles.button} onPress={() => handleCarMove("L", 1)}>
-            <Icon name="arrow-left" size={100} color="white" />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.button} onPress={() => handleCarMove("R", 1)}>
-            <Icon name="arrow-right" size={100} color="white" />
-          </TouchableOpacity>
+        <View style={styles.controlRow}>
+          <AnimatedButton onPress={() => handleCarMove("3", 3)} icon="arrow-left" disabled={raceStatus !== 1} />
+          <AnimatedButton onPress={() => handleCarMove("4", 4)} icon="arrow-right" disabled={raceStatus !== 1} />
         </View>
       </View>
-
       <View style={styles.userInfo}>
-        <Text style={styles.userText}>name: {username}</Text>
-        <Text style={styles.userText}>IP: {ipAddress || "loading..."}</Text>
+        <Text style={styles.userText}>Name: {username}</Text>
       </View>
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -106,48 +143,41 @@ const styles = StyleSheet.create({
   },
   button: {
     backgroundColor: '#3498db',
-    padding: 15,
-    borderRadius: 5,
-    marginTop: 10,
+    padding: 25,
+    borderRadius: 60,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginVertical: 0,
   },
-  buttonText: {
-    color: 'white',
-    fontSize: 18,
-  },
-  info: {
-    marginTop: 20,
-    fontSize: 16,
+  disabledButton: {
+    backgroundColor: '#95a5a6',
   },
   controls: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    width: '100%',
+    width: '90%',
     paddingHorizontal: 20,
-    marginBottom: 20,
   },
-  controlLeft: {
+  controlColumn: {
     flexDirection: 'column',
     alignItems: 'center',
   },
-  controlRight: {
+  controlRow: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   userInfo: {
     position: 'absolute',
-    bottom: 20,
+    bottom: 300,
     left: 20,
     right: 20,
     padding: 10,
-    backgroundColor: '#2c3e50',
     borderRadius: 10,
     alignItems: 'center',
   },
   userText: {
-    color: 'white',
-    fontSize: 20,
+    fontSize: 30,
     fontWeight: 'bold',
   },
 });
-
 
