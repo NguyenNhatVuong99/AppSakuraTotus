@@ -1,4 +1,4 @@
-{
+/*{
   "expo": {
     "name": "AppSakuraLotus",
     "slug": "AppSakuraLotus",
@@ -51,4 +51,67 @@
       }
     }
   }
+}*/
+
+{
+  "expo": {
+    "name": "AppSakuraLotus",
+    "slug": "AppSakuraLotus",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/ZINGSPEED.png",
+    "scheme": "myapp",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.car.SakuraLotus",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "package": "com.anonymous.AppSakuraLotus",
+      "permissions": [
+        "BLUETOOTH",
+        "BLUETOOTH_ADMIN",
+        "BLUETOOTH_SCAN",
+        "BLUETOOTH_CONNECT",
+        "ACCESS_FINE_LOCATION"
+      ]
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static",
+      "favicon": "./assets/images/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/splash-icon.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#ffffff"
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "71006e37-493f-4150-8720-94213923a4d4"
+      }
+    }
+  }
 }
+
